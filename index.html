@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dR2f2glzmIPzhJ7KSzqjOn1W3pBKSzdLtSBeC4Fckbk=' 'sha256-NBqzWqYlikOkQhmlMN7zJRC9PtW+dMYge+VgunLGAaQ='; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-iSjI46MxzlkBOVlJJ5FjYlswx6WRI1iwkyEO9nlXfvU=' 'sha256-FH44rjLi4RRxHxnRG1rg1gq5ihVJ1r50sdD+FWj8LbU='; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1C3D">
@@ -49,6 +49,7 @@ label.check{display:flex;gap:12px;align-items:center;font-size:16px;line-height:
 label.check input{width:28px;height:28px;flex:none;accent-color:var(--easy)}
 .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
 .actions .btn{flex:1 1 160px}
+.actions.paste{margin:0 0 12px}
 
 /* Bahn: Workout als Abschnittsstreifen */
 .lane{display:flex;height:26px;border-radius:8px;overflow:hidden;gap:2px;background:var(--ink);position:relative;margin:14px 0 6px}
@@ -101,6 +102,7 @@ ol.steps li i{width:14px;height:14px;border-radius:4px;display:block}
   <section id="setup">
     <h1>Workout fürs Laufband</h1>
     <p class="hint">Füge ein Workout im Intervals.icu-Format ein. Die App stellt Tempo und Steigung für jeden Abschnitt automatisch ein.</p>
+    <div class="actions paste"><button class="btn" id="pasteBtn">Workout aus Zwischenablage einfügen</button></div>
     <textarea id="wtext" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Workout-Text"></textarea>
     <div id="parseMsg"></div>
     <div class="lane" id="previewLane" aria-hidden="true"></div>
@@ -200,7 +202,7 @@ const Core = (() => {
       }
     };
     for (const raw of String(text).split(/\r?\n/)) {
-      const line = raw.trim();
+      const line = raw.trim().replace(/^[•·–—*]\s*/, '- ');
       if (!line) { flush(); continue; }
       if (/^warm\s*-?\s*up/i.test(line)) { flush(); section = 'warmup'; continue; }
       if (/^cool\s*-?\s*down/i.test(line)) { flush(); section = 'cooldown'; continue; }
@@ -646,6 +648,25 @@ $('startBtn').addEventListener('click', () => { if (plan && dev) { beep(660, 80)
 $('pauseBtn').addEventListener('click', () => Engine.pause());
 $('stopBtn').addEventListener('click', async () => { say('Stopp'); await Engine.halt(true); });
 $('alertBtn').addEventListener('click', () => $('alert').classList.remove('show'));
+$('pasteBtn').addEventListener('click', async () => {
+  const msg = $('parseMsg');
+  let text = '';
+  try { text = await navigator.clipboard.readText(); }
+  catch (e) {
+    $('wtext').focus(); $('wtext').select();
+    msg.innerHTML = '<div class="msg">Kein Zugriff auf die Zwischenablage. Tippe lange ins Feld und wähle „Einfügen“.</div>';
+    return;
+  }
+  text = (text || '').trim();
+  if (!text) { msg.innerHTML = '<div class="msg err">Die Zwischenablage ist leer. Kopiere zuerst den Workout-Text.</div>'; return; }
+  if (!Core.parseWorkout(text).steps.length) {
+    msg.innerHTML = '<div class="msg err">In der Zwischenablage steht kein Workout. Kopiere den Workout-Text aus Intervals.icu, also die Zeilen, die mit „- “ beginnen.</div>';
+    return;
+  }
+  $('wtext').value = text;
+  refreshPlan();
+  if (plan) $('parseMsg').insertAdjacentHTML('afterbegin', '<div class="msg ok">Workout eingefügt: ' + plan.planned.length + ' Abschnitte, ca. ' + Math.round(plan.totalSec / 60) + ' min.</div>');
+});
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && Engine.active && !Engine.paused && cfg.bgPause && dev) Engine.pause();
